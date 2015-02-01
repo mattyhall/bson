@@ -9,6 +9,7 @@ pub enum BsonValue {
     Bool(bool),
     UTCDatetime(i64),
     Null,
+    Regex {pat: String, opts: String},
     Int32(i32),
     Int64(i64),
 }
@@ -79,6 +80,8 @@ impl Document {
                 BsonValue::Bool(_) => 1,
                 BsonValue::UTCDatetime(_) => 8,
                 BsonValue::Null => 0,
+                BsonValue::Regex{ref pat, ref opts} =>
+                    pat.len() as i32 + opts.len() as i32 + 2,
                 BsonValue::Int32(_) => 4,
                 BsonValue::Int64(_) => 8,
             }
@@ -126,6 +129,12 @@ impl Document {
                     try!(w.write_u8(0x0A));
                     try!(write_cstring(w, &key[]));
                 }
+                BsonValue::Regex {ref pat, ref opts} => {
+                    try!(w.write_u8(0x0B));
+                    try!(write_cstring(w, &key[]));
+                    try!(write_cstring(w, &pat[]));
+                    try!(write_cstring(w, &opts[]));
+                },
                 BsonValue::Int32(v) => {
                     try!(w.write_u8(0x10));
                     try!(write_cstring(w, &key[]));
