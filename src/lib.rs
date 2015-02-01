@@ -7,6 +7,7 @@ pub enum BsonValue {
     String(String),
     Doc(Document),
     Bool(bool),
+    UTCDatetime(i64),
     Null,
     Int32(i32),
     Int64(i64),
@@ -76,6 +77,7 @@ impl Document {
                 BsonValue::String(ref s) => 4 + s.len() as i32 + 1,
                 BsonValue::Doc(ref d) => d.size(),
                 BsonValue::Bool(_) => 1,
+                BsonValue::UTCDatetime(_) => 8,
                 BsonValue::Null => 0,
                 BsonValue::Int32(_) => 4,
                 BsonValue::Int64(_) => 8,
@@ -114,6 +116,11 @@ impl Document {
                     } else {
                         try!(w.write_u8(0x00));
                     }
+                },
+                BsonValue::UTCDatetime(v) => {
+                    try!(w.write_u8(0x09));
+                    try!(write_cstring(w, &key[]));
+                    try!(w.write_le_i64(v));
                 },
                 BsonValue::Null => {
                     try!(w.write_u8(0x0A));
