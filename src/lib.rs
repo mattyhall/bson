@@ -28,6 +28,11 @@ impl ToBson for String {
     fn to_bson(&self) -> BsonValue { BsonValue::String(self.clone()) }
 }
 
+fn write_cstring<W: Writer>(w: &mut W, s: &str) -> IoResult<()> {
+    try!(w.write_str(s));
+    w.write_u8(0x0)
+}
+
 struct Document<'d> {
     hm: HashMap<&'d str, BsonValue> 
 }
@@ -66,26 +71,22 @@ impl<'d> Document<'d> {
             match *val {
                 BsonValue::Int32(v) => {
                     try!(w.write_u8(0x10));
-                    try!(w.write_str(*key));
-                    try!(w.write_u8(0x0));
+                    try!(write_cstring(w, *key));
                     try!(w.write_le_i32(v));
                 },
                 BsonValue::Int64(v) => {
                     try!(w.write_u8(0x12));
-                    try!(w.write_str(*key));
-                    try!(w.write_u8(0x0));
+                    try!(write_cstring(w, *key));
                     try!(w.write_le_i64(v));
                 },
                 BsonValue::Double(v) => {
                     try!(w.write_u8(0x01));
-                    try!(w.write_str(*key));
-                    try!(w.write_u8(0x0));
+                    try!(write_cstring(w, *key));
                     try!(w.write_le_f64(v));
                 }
                 BsonValue::String(ref v) => {
                     try!(w.write_u8(0x02));
-                    try!(w.write_str(*key));
-                    try!(w.write_u8(0x0));
+                    try!(write_cstring(w, *key));
                     // Add one for the null byte
                     try!(w.write_le_i32(v.len() as i32 + 1));
                     try!(w.write_str(&v[]));
@@ -95,6 +96,7 @@ impl<'d> Document<'d> {
         }
         w.write_u8(0x00)
     }
+
 
     pub fn to_bytes(&self) -> IoResult<Vec<u8>> {
         let mut writer = MemWriter::new();
