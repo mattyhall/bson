@@ -3,7 +3,7 @@ use std::str::{Utf8Error};
 use std::error::{Error, FromError};
 use std::fmt;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ErrorKind {
     StringDecodeError(Utf8Error),
     IoError(IoError),
@@ -11,7 +11,7 @@ pub enum ErrorKind {
     UnrecognisedCode,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct BsonError {
     kind: ErrorKind,
     desc: &'static str,

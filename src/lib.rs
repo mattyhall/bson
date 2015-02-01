@@ -196,10 +196,9 @@ impl Document {
         let t = try!(r.read_u8());
         let key = try!(read_cstring(r));
         let key = &key[];
-        let code = try!(
-            FromPrimitive::from_int(t as isize).ok_or(
-                BsonError::new(ErrorKind::UnrecognisedCode,
-                               Some(format!("{} is an unrecognised code", t)))));
+        let err = BsonError::new(ErrorKind::UnrecognisedCode,
+                                 Some(format!("{} is an unrecognised", t)));
+        let code = try!(FromPrimitive::from_int(t as isize).ok_or(err.clone()));
         match code {
             BsonCode::Double => {
                 let val = try!(r.read_le_f64());
@@ -209,15 +208,18 @@ impl Document {
                 let l = try!(r.read_le_i32());
                 let val = try!(read_cstring(r));
                 if l != val.len() as i32 + 1 {
-                    return Err(BsonError::new(ErrorKind::IncorrectLength,
-                        Some("A string was the incorrect length".to_string())));
+                    return Err(BsonError::new(
+                        ErrorKind::IncorrectLength,
+                        Some("A string was the incorrect length".to_string())
+                    ));
                 }
                 doc.insert(key, val);
-            }
-            _ => {}
-        }
+            },
+            _ => return Err(err)
+        } 
         if doc.size() != doc_len {
-            Err(BsonError::new(ErrorKind::IncorrectLength,
+            Err(BsonError::new(
+                ErrorKind::IncorrectLength,
                 Some("The document was not the correct length".to_string())))
         } else {
             Ok(doc)
