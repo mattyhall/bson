@@ -7,6 +7,7 @@ pub enum BsonValue {
     String(String),
     Doc(Document),
     Bool(bool),
+    Null,
     Int32(i32),
     Int64(i64),
 }
@@ -37,6 +38,10 @@ impl ToBson for Document {
 
 impl ToBson for bool {
     fn to_bson(self) -> BsonValue { BsonValue::Bool(self) }
+}
+
+impl ToBson for BsonValue {
+    fn to_bson(self) -> BsonValue { self }
 }
 
 fn write_cstring<W: Writer>(w: &mut W, s: &str) -> IoResult<()> {
@@ -71,6 +76,7 @@ impl Document {
                 BsonValue::String(ref s) => 4 + s.len() as i32 + 1,
                 BsonValue::Doc(ref d) => d.size(),
                 BsonValue::Bool(_) => 1,
+                BsonValue::Null => 0,
                 BsonValue::Int32(_) => 4,
                 BsonValue::Int64(_) => 8,
             }
@@ -109,6 +115,10 @@ impl Document {
                         try!(w.write_u8(0x00));
                     }
                 },
+                BsonValue::Null => {
+                    try!(w.write_u8(0x0A));
+                    try!(write_cstring(w, &key[]));
+                }
                 BsonValue::Int32(v) => {
                     try!(w.write_u8(0x10));
                     try!(write_cstring(w, &key[]));
@@ -178,6 +188,14 @@ fn test_bool_encode() {
     assert_eq!(bson.to_bytes(),
                Ok(vec![0x0c,0x00,0x00,0x00,0x08,0x62,0x6f,0x6f,0x6c,0x00,0x01,
                        0x00]));
+}
+
+#[test]
+fn test_null_encode() {
+    let mut bson = Document::new();
+    bson.insert("null", BsonValue::Null);
+    assert_eq!(bson.to_bytes(),
+               Ok(vec![0x0b,0x00,0x00,0x00,0x0a,0x6e,0x75,0x6c,0x6c,0x00,0x00]));
 }
 
 #[test]
