@@ -5,6 +5,7 @@ pub enum BsonValue {
     Int32(i32),
     Int64(i64),
     Double(f64),
+    String(String)
 }
 
 pub trait ToBson {
@@ -21,6 +22,10 @@ impl ToBson for i64 {
 
 impl ToBson for f64 {
     fn to_bson(&self) -> BsonValue { BsonValue::Double(*self) }
+}
+
+impl ToBson for String {
+    fn to_bson(&self) -> BsonValue { BsonValue::String(self.clone()) }
 }
 
 struct Document<'d> {
@@ -47,7 +52,9 @@ impl<'d> Document<'d> {
             size += match *val {
                 BsonValue::Int32(_) => 4,
                 BsonValue::Int64(_) => 8,
-                BsonValue::Double(_) => 8
+                BsonValue::Double(_) => 8,
+                // 4 bytes for the length, one for the NULL
+                BsonValue::String(ref s) => 4 + s.len() as i32 + 1
             }
         }
         size
@@ -74,6 +81,15 @@ impl<'d> Document<'d> {
                     try!(w.write_str(*key));
                     try!(w.write_u8(0x0));
                     try!(w.write_le_f64(v));
+                }
+                BsonValue::String(ref v) => {
+                    try!(w.write_u8(0x02));
+                    try!(w.write_str(*key));
+                    try!(w.write_u8(0x0));
+                    // Add one for the null byte
+                    try!(w.write_le_i32(v.len() as i32 + 1));
+                    try!(w.write_str(&v[]));
+                    try!(w.write_u8(0x0));
                 }
             }
         }
@@ -113,4 +129,14 @@ fn test_f64_encode() {
     assert_eq!(bson.to_bytes(),
                Ok(vec![0x14,0x00,0x00,0x00,0x01,0x66,0x6c,0x6f,0x61,0x74,0x00,
                        0x3d,0x0a,0xd7,0xa3,0x70,0x3d,0x28,0x40,0x00]));
+}
+
+
+#[test]
+fn test_str_encode() {
+    let mut bson = Document::new();
+    bson.insert("str", "string".to_string());
+    assert_eq!(bson.to_bytes(),
+               Ok(vec![0x15,0x00,0x00,0x00,0x02,0x73,0x74,0x72,0x00,0x07,0x00,
+                       0x00,0x00,0x73,0x74,0x72,0x69,0x6e,0x67,0x00,0x00]));
 }
