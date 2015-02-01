@@ -1,7 +1,11 @@
-#![feature(io, collections)]
+#![feature(core, io, collections)]
 use std::collections::HashMap;
-use std::old_io::{Writer, MemWriter, IoResult};
+use std::old_io::{Writer, MemWriter, MemReader, IoResult, IoError};
+use std::str::{Utf8Error, from_utf8};
+use std::error::{Error, FromError};
+use std::fmt;
 
+#[derive(Debug, PartialEq)]
 pub enum BsonValue {
     Double(f64),
     String(String),
@@ -46,11 +50,64 @@ impl ToBson for BsonValue {
     fn to_bson(self) -> BsonValue { self }
 }
 
+#[derive(Debug)]
+pub enum ErrorKind {
+    StringDecodeError(Utf8Error),
+    IoError(IoError),
+}
+
+#[derive(Debug)]
+pub struct BsonError {
+    kind: ErrorKind,
+    desc: &'static str,
+    detail: Option<String>,
+}
+
+impl FromError<IoError> for BsonError {
+    fn from_error(e: IoError) -> BsonError {
+        BsonError {
+            kind: ErrorKind::IoError(e),
+            desc: "Reader or writer call failed",
+            detail: None
+        }
+    }
+}
+
+impl FromError<Utf8Error> for BsonError {
+    fn from_error(e: Utf8Error) -> BsonError {
+        BsonError {
+            kind: ErrorKind::StringDecodeError(e),
+            desc: "String not UTF-8 encoded",
+            detail: None
+        }
+    }
+}
+
+impl fmt::Display for BsonError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.description())
+    }
+}
+
+impl Error for BsonError {
+    fn description(&self) -> &str {
+        match self.kind {
+            ErrorKind::IoError(ref e) => e.desc,
+            _ => self.desc
+        }
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        None
+    }
+}
+
 fn write_cstring<W: Writer>(w: &mut W, s: &str) -> IoResult<()> {
     try!(w.write_str(s));
     w.write_u8(0x0)
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Document {
     hm: HashMap<String, BsonValue> 
 }
@@ -158,6 +215,39 @@ impl Document {
     }
 }
 
+fn read_cstring<R: Reader>(r: &mut R) -> Result<String, BsonError> {
+    let mut bytes = Vec::new();
+    loop {
+        let b = try!(r.read_u8());
+        if b == 0x00 {
+            return Ok(try!(from_utf8(&bytes[])).to_string());
+        }
+        bytes.push(b);
+    }
+}
+
+pub fn read<R: Reader>(r: &mut R) -> Result<Document, BsonError> {
+    try!(r.read_le_i32());
+    let mut doc = Document::new();
+
+    let t = try!(r.read_u8());
+    match t {
+        0x01 => {
+            let key = try!(read_cstring(r));
+            let val = try!(r.read_le_f64());
+            doc.insert(&key[], val);
+        }
+        _ => {}
+    }
+    Ok(doc)
+}
+
+pub fn from_bytes(b: &[u8]) -> Result<Document, BsonError> {
+    let mut v = Vec::new();
+    v.push_all(b);
+    let mut r = MemReader::new(v);
+    read(&mut r)
+}
 
 #[test]
 fn test_i64_encode() {
@@ -172,9 +262,11 @@ fn test_i64_encode() {
 fn test_f64_encode() {
     let mut bson = Document::new();
     bson.insert("float", 12.12);
-    assert_eq!(bson.to_bytes(),
+    let bytes = bson.to_bytes();
+    assert_eq!(bytes,
                Ok(vec![0x14,0x00,0x00,0x00,0x01,0x66,0x6c,0x6f,0x61,0x74,0x00,
                        0x3d,0x0a,0xd7,0xa3,0x70,0x3d,0x28,0x40,0x00]));
+    assert_eq!(bson, from_bytes(&bytes.unwrap()[]).unwrap());
 }
 
 #[test]
