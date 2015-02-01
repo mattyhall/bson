@@ -58,6 +58,17 @@ fn write_cstring<W: Writer>(w: &mut W, s: &str) -> IoResult<()> {
     w.write_u8(0x0)
 }
 
+fn read_cstring<R: Reader>(r: &mut R) -> Result<String, BsonError> {
+    let mut bytes = Vec::new();
+    loop {
+        let b = try!(r.read_u8());
+        if b == 0x00 {
+            return Ok(try!(from_utf8(&bytes[])).to_string());
+        }
+        bytes.push(b);
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Document {
     hm: HashMap<String, BsonValue> 
@@ -158,47 +169,36 @@ impl Document {
         w.write_u8(0x00)
     }
 
-
     pub fn to_bytes(&self) -> IoResult<Vec<u8>> {
         let mut writer = MemWriter::new();
         try!(self.write(&mut writer));
         Ok(writer.into_inner())
     }
-}
 
-fn read_cstring<R: Reader>(r: &mut R) -> Result<String, BsonError> {
-    let mut bytes = Vec::new();
-    loop {
-        let b = try!(r.read_u8());
-        if b == 0x00 {
-            return Ok(try!(from_utf8(&bytes[])).to_string());
+    pub fn read<R: Reader>(r: &mut R) -> Result<Document, BsonError> {
+        try!(r.read_le_i32());
+        let mut doc = Document::new();
+
+        let t = try!(r.read_u8());
+        match t {
+            0x01 => {
+                let key = try!(read_cstring(r));
+                let val = try!(r.read_le_f64());
+                doc.insert(&key[], val);
+            }
+            _ => {}
         }
-        bytes.push(b);
+        Ok(doc)
+    }
+
+    pub fn from_bytes(b: &[u8]) -> Result<Document, BsonError> {
+        let mut v = Vec::new();
+        v.push_all(b);
+        let mut r = MemReader::new(v);
+        Document::read(&mut r)
     }
 }
 
-pub fn read<R: Reader>(r: &mut R) -> Result<Document, BsonError> {
-    try!(r.read_le_i32());
-    let mut doc = Document::new();
-
-    let t = try!(r.read_u8());
-    match t {
-        0x01 => {
-            let key = try!(read_cstring(r));
-            let val = try!(r.read_le_f64());
-            doc.insert(&key[], val);
-        }
-        _ => {}
-    }
-    Ok(doc)
-}
-
-pub fn from_bytes(b: &[u8]) -> Result<Document, BsonError> {
-    let mut v = Vec::new();
-    v.push_all(b);
-    let mut r = MemReader::new(v);
-    read(&mut r)
-}
 
 #[test]
 fn test_i64_encode() {
@@ -217,7 +217,7 @@ fn test_f64_encode() {
     assert_eq!(bytes,
                Ok(vec![0x14,0x00,0x00,0x00,0x01,0x66,0x6c,0x6f,0x61,0x74,0x00,
                        0x3d,0x0a,0xd7,0xa3,0x70,0x3d,0x28,0x40,0x00]));
-    assert_eq!(bson, from_bytes(&bytes.unwrap()[]).unwrap());
+    assert_eq!(bson, Document::from_bytes(&bytes.unwrap()[]).unwrap());
 }
 
 #[test]
