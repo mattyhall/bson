@@ -8,6 +8,7 @@ pub enum ErrorKind {
     StringDecodeError(Utf8Error),
     IoError(IoError),
     IncorrectLength,
+    UnrecognisedCode,
 }
 
 #[derive(Debug, PartialEq)]
@@ -23,6 +24,7 @@ impl BsonError {
             ErrorKind::StringDecodeError(_) => "String not UTF-8 encoded",
             ErrorKind::IoError(_) => "Reader or writer call failed",
             ErrorKind::IncorrectLength => "Input was shorter than expected",
+            ErrorKind::UnrecognisedCode => "A bson code was not recognised",
         };
         BsonError {
             kind: k,

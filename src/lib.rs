@@ -4,6 +4,7 @@ mod error;
 use std::collections::HashMap;
 use std::old_io::{Writer, MemWriter, MemReader, IoResult};
 use std::str::{from_utf8};
+use std::num::FromPrimitive;
 
 pub use error::*;
 
@@ -18,6 +19,19 @@ pub enum BsonValue {
     Regex {pat: String, opts: String},
     Int32(i32),
     Int64(i64),
+}
+
+#[derive(Debug, PartialEq, FromPrimitive)]
+enum BsonCode {
+    Double = 0x01,
+    String = 0x02,
+    Doc = 0x03,
+    Bool = 0x08,
+    UTCDatetime = 0x09,
+    Null = 0x0A,
+    Regex = 0x0B,
+    Int32 = 0x10,
+    Int64 = 0x12,
 }
 
 pub trait ToBson {
@@ -113,12 +127,12 @@ impl Document {
         for (key, val) in self.hm.iter() {
             match *val {
                 BsonValue::Double(v) => {
-                    try!(w.write_u8(0x01));
+                    try!(w.write_u8(BsonCode::Double as u8));
                     try!(write_cstring(w, &key[]));
                     try!(w.write_le_f64(v));
                 }
                 BsonValue::String(ref v) => {
-                    try!(w.write_u8(0x02));
+                    try!(w.write_u8(BsonCode::String as u8));
                     try!(write_cstring(w, &key[]));
                     // Add one for the null byte
                     try!(w.write_le_i32(v.len() as i32 + 1));
@@ -126,12 +140,12 @@ impl Document {
                     try!(w.write_u8(0x0));
                 }
                 BsonValue::Doc(ref d) => {
-                    try!(w.write_u8(0x03));
+                    try!(w.write_u8(BsonCode::Doc as u8));
                     try!(write_cstring(w, &key[]));
                     try!(d.write(w));
                 }
                 BsonValue::Bool(b) => {
-                    try!(w.write_u8(0x08));
+                    try!(w.write_u8(BsonCode::Bool as u8));
                     try!(write_cstring(w, &key[]));
                     if b {
                         try!(w.write_u8(0x01));
@@ -140,27 +154,27 @@ impl Document {
                     }
                 },
                 BsonValue::UTCDatetime(v) => {
-                    try!(w.write_u8(0x09));
+                    try!(w.write_u8(BsonCode::UTCDatetime as u8));
                     try!(write_cstring(w, &key[]));
                     try!(w.write_le_i64(v));
                 },
                 BsonValue::Null => {
-                    try!(w.write_u8(0x0A));
+                    try!(w.write_u8(BsonCode::Null as u8));
                     try!(write_cstring(w, &key[]));
                 }
                 BsonValue::Regex {ref pat, ref opts} => {
-                    try!(w.write_u8(0x0B));
+                    try!(w.write_u8(BsonCode::Regex as u8));
                     try!(write_cstring(w, &key[]));
                     try!(write_cstring(w, &pat[]));
                     try!(write_cstring(w, &opts[]));
                 },
                 BsonValue::Int32(v) => {
-                    try!(w.write_u8(0x10));
+                    try!(w.write_u8(BsonCode::Int32 as u8));
                     try!(write_cstring(w, &key[]));
                     try!(w.write_le_i32(v));
                 },
                 BsonValue::Int64(v) => {
-                    try!(w.write_u8(0x12));
+                    try!(w.write_u8(BsonCode::Int64 as u8));
                     try!(write_cstring(w, &key[]));
                     try!(w.write_le_i64(v));
                 },
@@ -182,12 +196,16 @@ impl Document {
         let t = try!(r.read_u8());
         let key = try!(read_cstring(r));
         let key = &key[];
-        match t {
-            0x01 => {
+        let code = try!(
+            FromPrimitive::from_int(t as isize).ok_or(
+                BsonError::new(ErrorKind::UnrecognisedCode,
+                               Some(format!("{} is an unrecognised code", t)))));
+        match code {
+            BsonCode::Double => {
                 let val = try!(r.read_le_f64());
                 doc.insert(key, val);
             },
-            0x02 => {
+            BsonCode::String => {
                 let l = try!(r.read_le_i32());
                 let val = try!(read_cstring(r));
                 if l != val.len() as i32 + 1 {
