@@ -8,6 +8,7 @@ pub enum BsonValue {
     Double(f64),
     String(String),
     Doc(Document),
+    Bool(bool),
 }
 
 pub trait ToBson {
@@ -32,6 +33,10 @@ impl ToBson for String {
 
 impl ToBson for Document {
     fn to_bson(self) -> BsonValue { BsonValue::Doc(self) }
+}
+
+impl ToBson for bool {
+    fn to_bson(self) -> BsonValue { BsonValue::Bool(self) }
 }
 
 fn write_cstring<W: Writer>(w: &mut W, s: &str) -> IoResult<()> {
@@ -67,6 +72,7 @@ impl Document {
                 // 4 bytes for the length, one for the NULL
                 BsonValue::String(ref s) => 4 + s.len() as i32 + 1,
                 BsonValue::Doc(ref d) => d.size(),
+                BsonValue::Bool(_) => 1,
             }
         }
         size
@@ -103,6 +109,15 @@ impl Document {
                     try!(w.write_u8(0x03));
                     try!(write_cstring(w, &key[]));
                     try!(d.write(w));
+                }
+                BsonValue::Bool(b) => {
+                    try!(w.write_u8(0x08));
+                    try!(write_cstring(w, &key[]));
+                    if b {
+                        try!(w.write_u8(0x01));
+                    } else {
+                        try!(w.write_u8(0x00));
+                    }
                 }
             }
         }
@@ -155,6 +170,7 @@ fn test_str_encode() {
                        0x00,0x00,0x73,0x74,0x72,0x69,0x6e,0x67,0x00,0x00]));
 }
 
+#[test]
 fn test_doc_encode() {
     let mut bson = Document::new();
     let mut inner = Document::new();
@@ -163,4 +179,13 @@ fn test_doc_encode() {
     assert_eq!(bson.to_bytes(),
                Ok(vec![0x16,0x00,0x00,0x00,0x03,0x64,0x00,0x0e,0x00,0x00,0x00,
                        0x10,0x69,0x6e,0x74,0x00,0x01,0x00,0x00,0x00,0x00,0x00]));
+}
+
+#[test]
+fn test_bool_encode() {
+    let mut bson = Document::new();
+    bson.insert("bool", true);
+    assert_eq!(bson.to_bytes(),
+               Ok(vec![0x0c,0x00,0x00,0x00,0x08,0x62,0x6f,0x6f,0x6c,0x00,0x01,
+                       0x00]));
 }
