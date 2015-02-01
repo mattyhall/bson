@@ -3,12 +3,12 @@ use std::collections::HashMap;
 use std::old_io::{Writer, MemWriter, IoResult};
 
 pub enum BsonValue {
-    Int32(i32),
-    Int64(i64),
     Double(f64),
     String(String),
     Doc(Document),
     Bool(bool),
+    Int32(i32),
+    Int64(i64),
 }
 
 pub trait ToBson {
@@ -66,13 +66,13 @@ impl Document {
             // An extra byte for the NULL
             size += key.len() as i32 + 1;
             size += match *val {
-                BsonValue::Int32(_) => 4,
-                BsonValue::Int64(_) => 8,
                 BsonValue::Double(_) => 8,
                 // 4 bytes for the length, one for the NULL
                 BsonValue::String(ref s) => 4 + s.len() as i32 + 1,
                 BsonValue::Doc(ref d) => d.size(),
                 BsonValue::Bool(_) => 1,
+                BsonValue::Int32(_) => 4,
+                BsonValue::Int64(_) => 8,
             }
         }
         size
@@ -82,16 +82,6 @@ impl Document {
         try!(w.write_le_i32(self.size()));
         for (key, val) in self.hm.iter() {
             match *val {
-                BsonValue::Int32(v) => {
-                    try!(w.write_u8(0x10));
-                    try!(write_cstring(w, &key[]));
-                    try!(w.write_le_i32(v));
-                },
-                BsonValue::Int64(v) => {
-                    try!(w.write_u8(0x12));
-                    try!(write_cstring(w, &key[]));
-                    try!(w.write_le_i64(v));
-                },
                 BsonValue::Double(v) => {
                     try!(w.write_u8(0x01));
                     try!(write_cstring(w, &key[]));
@@ -118,7 +108,17 @@ impl Document {
                     } else {
                         try!(w.write_u8(0x00));
                     }
-                }
+                },
+                BsonValue::Int32(v) => {
+                    try!(w.write_u8(0x10));
+                    try!(write_cstring(w, &key[]));
+                    try!(w.write_le_i32(v));
+                },
+                BsonValue::Int64(v) => {
+                    try!(w.write_u8(0x12));
+                    try!(write_cstring(w, &key[]));
+                    try!(w.write_le_i64(v));
+                },
             }
         }
         w.write_u8(0x00)
@@ -132,15 +132,6 @@ impl Document {
     }
 }
 
-
-#[test]
-fn test_i32_encode() {
-    let mut bson = Document::new();
-    bson.insert("int", 10i32);
-    assert_eq!(bson.to_bytes(),
-               Ok(vec![0x0e,0x00,0x00,0x00,0x10,0x69,0x6e,0x74,0x00,0x0a,0x00,
-                       0x00,0x00,0x00]));
-}
 
 #[test]
 fn test_i64_encode() {
@@ -159,7 +150,6 @@ fn test_f64_encode() {
                Ok(vec![0x14,0x00,0x00,0x00,0x01,0x66,0x6c,0x6f,0x61,0x74,0x00,
                        0x3d,0x0a,0xd7,0xa3,0x70,0x3d,0x28,0x40,0x00]));
 }
-
 
 #[test]
 fn test_str_encode() {
@@ -188,4 +178,13 @@ fn test_bool_encode() {
     assert_eq!(bson.to_bytes(),
                Ok(vec![0x0c,0x00,0x00,0x00,0x08,0x62,0x6f,0x6f,0x6c,0x00,0x01,
                        0x00]));
+}
+
+#[test]
+fn test_i32_encode() {
+    let mut bson = Document::new();
+    bson.insert("int", 10i32);
+    assert_eq!(bson.to_bytes(),
+               Ok(vec![0x0e,0x00,0x00,0x00,0x10,0x69,0x6e,0x74,0x00,0x0a,0x00,
+                       0x00,0x00,0x00]));
 }
