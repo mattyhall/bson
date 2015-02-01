@@ -3,36 +3,44 @@ use std::str::{Utf8Error};
 use std::error::{Error, FromError};
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ErrorKind {
     StringDecodeError(Utf8Error),
     IoError(IoError),
+    IncorrectLength,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct BsonError {
     kind: ErrorKind,
     desc: &'static str,
     detail: Option<String>,
 }
 
+impl BsonError {
+    pub fn new(k: ErrorKind, detail: Option<String>) -> BsonError {
+        let desc = match k {
+            ErrorKind::StringDecodeError(_) => "String not UTF-8 encoded",
+            ErrorKind::IoError(_) => "Reader or writer call failed",
+            ErrorKind::IncorrectLength => "Input was shorter than expected",
+        };
+        BsonError {
+            kind: k,
+            desc: desc,
+            detail: detail
+        }
+    } 
+}
+
 impl FromError<IoError> for BsonError {
     fn from_error(e: IoError) -> BsonError {
-        BsonError {
-            kind: ErrorKind::IoError(e),
-            desc: "Reader or writer call failed",
-            detail: None
-        }
+        BsonError::new(ErrorKind::IoError(e), None)
     }
 }
 
 impl FromError<Utf8Error> for BsonError {
     fn from_error(e: Utf8Error) -> BsonError {
-        BsonError {
-            kind: ErrorKind::StringDecodeError(e),
-            desc: "String not UTF-8 encoded",
-            detail: None
-        }
+        BsonError::new(ErrorKind::StringDecodeError(e), None)
     }
 }
 
@@ -46,7 +54,7 @@ impl Error for BsonError {
     fn description(&self) -> &str {
         match self.kind {
             ErrorKind::IoError(ref e) => e.desc,
-            _ => self.desc
+            _ => self.desc,
         }
     }
 

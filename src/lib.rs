@@ -176,19 +176,34 @@ impl Document {
     }
 
     pub fn read<R: Reader>(r: &mut R) -> Result<Document, BsonError> {
-        try!(r.read_le_i32());
+        let doc_len = try!(r.read_le_i32());
         let mut doc = Document::new();
 
         let t = try!(r.read_u8());
+        let key = try!(read_cstring(r));
+        let key = &key[];
         match t {
             0x01 => {
-                let key = try!(read_cstring(r));
                 let val = try!(r.read_le_f64());
-                doc.insert(&key[], val);
+                doc.insert(key, val);
+            },
+            0x02 => {
+                let l = try!(r.read_le_i32());
+                let val = try!(read_cstring(r));
+                if l != val.len() as i32 + 1 {
+                    return Err(BsonError::new(ErrorKind::IncorrectLength,
+                        Some("A string was the incorrect length".to_string())));
+                }
+                doc.insert(key, val);
             }
             _ => {}
         }
-        Ok(doc)
+        if doc.size() != doc_len {
+            Err(BsonError::new(ErrorKind::IncorrectLength,
+                Some("The document was not the correct length".to_string())))
+        } else {
+            Ok(doc)
+        }
     }
 
     pub fn from_bytes(b: &[u8]) -> Result<Document, BsonError> {
