@@ -1,3 +1,4 @@
+#![feature(io, collections)]
 use std::collections::HashMap;
 use std::old_io::{Writer, MemWriter, IoResult};
 
@@ -5,27 +6,32 @@ pub enum BsonValue {
     Int32(i32),
     Int64(i64),
     Double(f64),
-    String(String)
+    String(String),
+    Doc(Document),
 }
 
 pub trait ToBson {
-    fn to_bson(&self) -> BsonValue;
+    fn to_bson(self) -> BsonValue;
 }
 
 impl ToBson for i32 {
-    fn to_bson(&self) -> BsonValue { BsonValue::Int32(*self) }
+    fn to_bson(self) -> BsonValue { BsonValue::Int32(self) }
 }
 
 impl ToBson for i64 {
-    fn to_bson(&self) -> BsonValue { BsonValue::Int64(*self) }
+    fn to_bson(self) -> BsonValue { BsonValue::Int64(self) }
 }
 
 impl ToBson for f64 {
-    fn to_bson(&self) -> BsonValue { BsonValue::Double(*self) }
+    fn to_bson(self) -> BsonValue { BsonValue::Double(self) }
 }
 
 impl ToBson for String {
-    fn to_bson(&self) -> BsonValue { BsonValue::String(self.clone()) }
+    fn to_bson(self) -> BsonValue { BsonValue::String(self) }
+}
+
+impl ToBson for Document {
+    fn to_bson(self) -> BsonValue { BsonValue::Doc(self) }
 }
 
 fn write_cstring<W: Writer>(w: &mut W, s: &str) -> IoResult<()> {
@@ -33,17 +39,17 @@ fn write_cstring<W: Writer>(w: &mut W, s: &str) -> IoResult<()> {
     w.write_u8(0x0)
 }
 
-struct Document<'d> {
-    hm: HashMap<&'d str, BsonValue> 
+pub struct Document {
+    hm: HashMap<String, BsonValue> 
 }
 
-impl<'d> Document<'d> {
-    pub fn new() -> Document<'d> {
+impl Document {
+    pub fn new() -> Document {
         Document {hm: HashMap::new()}
     }
 
-    pub fn insert<V: ToBson>(&mut self, key: &'d str, val: V) {
-       self.hm.insert(key, val.to_bson());
+    pub fn insert<V: ToBson>(&mut self, key: &str, val: V) {
+       self.hm.insert(key.to_string(), val.to_bson());
     }
 
     pub fn size(&self) -> i32 {
@@ -59,7 +65,8 @@ impl<'d> Document<'d> {
                 BsonValue::Int64(_) => 8,
                 BsonValue::Double(_) => 8,
                 // 4 bytes for the length, one for the NULL
-                BsonValue::String(ref s) => 4 + s.len() as i32 + 1
+                BsonValue::String(ref s) => 4 + s.len() as i32 + 1,
+                BsonValue::Doc(ref d) => d.size(),
             }
         }
         size
@@ -71,26 +78,31 @@ impl<'d> Document<'d> {
             match *val {
                 BsonValue::Int32(v) => {
                     try!(w.write_u8(0x10));
-                    try!(write_cstring(w, *key));
+                    try!(write_cstring(w, &key[]));
                     try!(w.write_le_i32(v));
                 },
                 BsonValue::Int64(v) => {
                     try!(w.write_u8(0x12));
-                    try!(write_cstring(w, *key));
+                    try!(write_cstring(w, &key[]));
                     try!(w.write_le_i64(v));
                 },
                 BsonValue::Double(v) => {
                     try!(w.write_u8(0x01));
-                    try!(write_cstring(w, *key));
+                    try!(write_cstring(w, &key[]));
                     try!(w.write_le_f64(v));
                 }
                 BsonValue::String(ref v) => {
                     try!(w.write_u8(0x02));
-                    try!(write_cstring(w, *key));
+                    try!(write_cstring(w, &key[]));
                     // Add one for the null byte
                     try!(w.write_le_i32(v.len() as i32 + 1));
                     try!(w.write_str(&v[]));
                     try!(w.write_u8(0x0));
+                }
+                BsonValue::Doc(ref d) => {
+                    try!(w.write_u8(0x03));
+                    try!(write_cstring(w, &key[]));
+                    try!(d.write(w));
                 }
             }
         }
@@ -141,4 +153,14 @@ fn test_str_encode() {
     assert_eq!(bson.to_bytes(),
                Ok(vec![0x15,0x00,0x00,0x00,0x02,0x73,0x74,0x72,0x00,0x07,0x00,
                        0x00,0x00,0x73,0x74,0x72,0x69,0x6e,0x67,0x00,0x00]));
+}
+
+fn test_doc_encode() {
+    let mut bson = Document::new();
+    let mut inner = Document::new();
+    inner.insert("int", 1i32);
+    bson.insert("d", inner);
+    assert_eq!(bson.to_bytes(),
+               Ok(vec![0x16,0x00,0x00,0x00,0x03,0x64,0x00,0x0e,0x00,0x00,0x00,
+                       0x10,0x69,0x6e,0x74,0x00,0x01,0x00,0x00,0x00,0x00,0x00]));
 }
