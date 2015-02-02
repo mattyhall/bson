@@ -219,6 +219,19 @@ impl Document {
                     val.to_bson()
                 },
                 BsonCode::Doc => try!(Document::read(r)).to_bson(),
+                BsonCode::Bool => {
+                    let val = try!(r.read_u8());
+                    if val == 0x00 {
+                        false.to_bson()
+                    } else if val == 0x01 {
+                        true.to_bson()
+                    } else {
+                        return Err(BsonError::new(
+                            ErrorKind::UnrecognisedCode,
+                            Some("A bool must be either 0x00 or 0x01".to_string())
+                        ));
+                    }
+                },
                 _ => return Err(err)
             };
             doc.insert(key, val);
