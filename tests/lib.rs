@@ -19,7 +19,7 @@ fn test_i64_encode() {
 }
 
 #[test]
-fn test_f64_encode() {
+fn test_f64() {
     let mut bson = Document::new();
     bson.insert("float", 12.12);
     round_trip(bson, vec![0x14,0x00,0x00,0x00,0x01,0x66,0x6c,0x6f,0x61,0x74,
@@ -27,7 +27,7 @@ fn test_f64_encode() {
 }
 
 #[test]
-fn test_str_encode() {
+fn test_str() {
     let mut bson = Document::new();
     bson.insert("str", "string".to_string());
     round_trip(bson, vec![0x15,0x00,0x00,0x00,0x02,0x73,0x74,0x72,0x00,0x07,
@@ -36,7 +36,7 @@ fn test_str_encode() {
 }
 
 #[test]
-fn test_doc_encode() {
+fn test_doc() {
     let mut bson = Document::new();
     let mut inner = Document::new();
     inner.insert("double", 12.12);
