@@ -232,6 +232,9 @@ impl Document {
                         ));
                     }
                 },
+                BsonCode::UTCDatetime => {
+                    BsonValue::UTCDatetime(try!(r.read_le_i64()))
+                },
                 _ => return Err(err)
             };
             doc.insert(key, val);
