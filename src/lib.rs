@@ -93,8 +93,9 @@ impl Document {
         Document {hm: HashMap::new()}
     }
 
-    pub fn insert<V: ToBson>(&mut self, key: &str, val: V) {
-       self.hm.insert(key.to_string(), val.to_bson());
+    pub fn insert<'s, V: ToBson>(&'s mut self, key: &str, val: V) -> &'s mut Document {
+        self.hm.insert(key.to_string(), val.to_bson());
+        self
     }
 
     pub fn size(&self) -> i32 {
