@@ -193,29 +193,34 @@ impl Document {
         let doc_len = try!(r.read_le_i32());
         let mut doc = Document::new();
 
-        let t = try!(r.read_u8());
-        let key = try!(read_cstring(r));
-        let key = &key[];
-        let err = BsonError::new(ErrorKind::UnrecognisedCode,
-                                 Some(format!("{} is an unrecognised", t)));
-        let code = try!(FromPrimitive::from_int(t as isize).ok_or(err.clone()));
-        let val = match code {
-            BsonCode::Double => try!(r.read_le_f64()).to_bson(),
-            BsonCode::String => {
-                let l = try!(r.read_le_i32());
-                let val = try!(read_cstring(r));
-                if l != val.len() as i32 + 1 {
-                    return Err(BsonError::new(
-                        ErrorKind::IncorrectLength,
-                        Some("A string was the incorrect length".to_string())
-                    ));
-                }
-                val.to_bson()
-            },
-            BsonCode::Doc => try!(Document::read(r)).to_bson(),
-            _ => return Err(err)
-        };
-        doc.insert(key, val);
+        loop {
+            let t = try!(r.read_u8());
+            if t == 0x00 {
+                break;
+            }
+            let key = try!(read_cstring(r));
+            let key = &key[];
+            let err = BsonError::new(ErrorKind::UnrecognisedCode,
+                                     Some(format!("{} is an unrecognised", t)));
+            let code = try!(FromPrimitive::from_int(t as isize).ok_or(err.clone()));
+            let val = match code {
+                BsonCode::Double => try!(r.read_le_f64()).to_bson(),
+                BsonCode::String => {
+                    let l = try!(r.read_le_i32());
+                    let val = try!(read_cstring(r));
+                    if l != val.len() as i32 + 1 {
+                        return Err(BsonError::new(
+                            ErrorKind::IncorrectLength,
+                            Some("A string was the incorrect length".to_string())
+                        ));
+                    }
+                    val.to_bson()
+                },
+                BsonCode::Doc => try!(Document::read(r)).to_bson(),
+                _ => return Err(err)
+            };
+            doc.insert(key, val);
+        }
         if doc.size() != doc_len {
             Err(BsonError::new(
                 ErrorKind::IncorrectLength,
