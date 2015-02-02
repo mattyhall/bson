@@ -235,6 +235,7 @@ impl Document {
                 BsonCode::UTCDatetime => {
                     BsonValue::UTCDatetime(try!(r.read_le_i64()))
                 },
+                BsonCode::Null => BsonValue::Null,
                 _ => return Err(err)
             };
             doc.insert(key, val);
