@@ -199,11 +199,8 @@ impl Document {
         let err = BsonError::new(ErrorKind::UnrecognisedCode,
                                  Some(format!("{} is an unrecognised", t)));
         let code = try!(FromPrimitive::from_int(t as isize).ok_or(err.clone()));
-        match code {
-            BsonCode::Double => {
-                let val = try!(r.read_le_f64());
-                doc.insert(key, val);
-            },
+        let val = match code {
+            BsonCode::Double => try!(r.read_le_f64()).to_bson(),
             BsonCode::String => {
                 let l = try!(r.read_le_i32());
                 let val = try!(read_cstring(r));
@@ -213,10 +210,12 @@ impl Document {
                         Some("A string was the incorrect length".to_string())
                     ));
                 }
-                doc.insert(key, val);
+                val.to_bson()
             },
+            BsonCode::Doc => try!(Document::read(r)).to_bson(),
             _ => return Err(err)
-        } 
+        };
+        doc.insert(key, val);
         if doc.size() != doc_len {
             Err(BsonError::new(
                 ErrorKind::IncorrectLength,
