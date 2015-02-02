@@ -200,8 +200,10 @@ impl Document {
             }
             let key = try!(read_cstring(r));
             let key = &key[];
-            let err = BsonError::new(ErrorKind::UnrecognisedCode,
-                                     Some(format!("{} is an unrecognised", t)));
+            let err = BsonError::new(
+                ErrorKind::UnrecognisedCode,
+                Some(format!("0x{:X} is an unrecognised code", t))
+            );
             let code = try!(FromPrimitive::from_int(t as isize).ok_or(err.clone()));
             let val = match code {
                 BsonCode::Double => try!(r.read_le_f64()).to_bson(),
