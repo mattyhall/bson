@@ -240,8 +240,9 @@ impl Document {
                     let pat = try!(read_cstring(r));
                     let opts = try!(read_cstring(r));
                     BsonValue::Regex {pat: pat, opts: opts}
-                }
-                _ => return Err(err)
+                },
+                BsonCode::Int32 => try!(r.read_le_i32()).to_bson(),
+                BsonCode::Int64 => try!(r.read_le_i64()).to_bson(),
             };
             doc.insert(key, val);
         }
