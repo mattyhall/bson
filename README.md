@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/mattyhall/bson.svg?branch=master)](https://travis-ci.org/mattyhall/bson)
+
 # Rust bson
 
 A Rust implementation of bson. So far, the following types are supported:
