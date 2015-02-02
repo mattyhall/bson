@@ -236,6 +236,11 @@ impl Document {
                     BsonValue::UTCDatetime(try!(r.read_le_i64()))
                 },
                 BsonCode::Null => BsonValue::Null,
+                BsonCode::Regex => {
+                    let pat = try!(read_cstring(r));
+                    let opts = try!(read_cstring(r));
+                    BsonValue::Regex {pat: pat, opts: opts}
+                }
                 _ => return Err(err)
             };
             doc.insert(key, val);
